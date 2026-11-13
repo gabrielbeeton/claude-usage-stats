@@ -1,0 +1,14 @@
+#!/bin/bash
+# stats [toggle|show|hide|quit] - opens or closes the floating Usage Stats window.
+APP="$HOME/Applications/Usage Stats.app"
+CMD="${1:-toggle}"
+case "$CMD" in
+  toggle|show|hide) ;;
+  quit) pkill -x UsageStats; exit 0 ;;
+  *) echo "usage: stats [toggle|show|hide|quit]" >&2; exit 1 ;;
+esac
+if pgrep -xq UsageStats; then
+  "$APP/Contents/MacOS/UsageStats" "--$CMD"
+elif [ "$CMD" != "hide" ]; then
+  open "$APP" --args --show
+fi
