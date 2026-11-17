@@ -21,6 +21,14 @@ Mac. Nothing is sent anywhere.
 - Pops open whenever Claude is launched.
 - **Option-Command-U** opens and closes it from any app.
 - A grid icon in the menu bar has show/hide, refresh, Open at Login and quit.
+- **Open at Login** writes a launch agent to
+  `~/Library/LaunchAgents/local.usage-stats.plist` that runs
+  `open -g "Usage Stats.app"` when you log in (more reliable than a login item
+  for a locally built, ad-hoc signed app). Turn it off from the same menu, or:
+
+  ```bash
+  "$HOME/Applications/Usage Stats.app/Contents/MacOS/UsageStats" --login-off
+  ```
 - Drag it anywhere; it remembers its position. Follows light and dark mode.
 
 ## Build
@@ -48,6 +56,8 @@ do what they say.
 
 - Token counts are deduplicated by reply, so resumed or forked chats are not
   counted twice.
+- The app writes a short startup log (whether the shortcut and login agent are
+  set up) to `~/Library/Application Support/Usage Stats/log.txt`.
 - Parsed results are cached in `~/Library/Application Support/Usage Stats/`, so
   only changed logs are reread.
 - Not affiliated with Anthropic.

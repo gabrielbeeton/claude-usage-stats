@@ -1,12 +1,38 @@
 import AppKit
 import Carbon.HIToolbox
-import ServiceManagement
 import SwiftUI
 
 /// A borderless panel that floats over other apps without taking focus from them.
 final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+}
+
+/// Starts the app at login through a per-user launch agent. `open -g` reuses a running copy
+/// and leaves the app in the background.
+enum LoginAgent {
+    static let label = "local.usage-stats"
+    static var url: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents/\(label).plist")
+    }
+    static var isInstalled: Bool { FileManager.default.fileExists(atPath: url.path) }
+
+    static func install() throws {
+        let plist: [String: Any] = [
+            "Label": label,
+            "ProgramArguments": ["/usr/bin/open", "-g", Bundle.main.bundlePath],
+            "RunAtLoad": true,
+            "ProcessType": "Interactive",
+        ]
+        let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: .atomic)
+    }
+
+    static func remove() throws {
+        if isInstalled { try FileManager.default.removeItem(at: url) }
+    }
 }
 
 let commandNotification = Notification.Name("local.usage-stats.command")
@@ -21,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private func writeLog(_ line: String) {
         let url = LogReader.cacheURL.deletingLastPathComponent().appendingPathComponent("log.txt")
-        let text = "\(Date()): \(line) (login item: \(SMAppService.mainApp.status.rawValue))\n"
+        let text = "\(Date()): \(line) (open at login: \(LoginAgent.isInstalled))\n"
         if let handle = try? FileHandle(forWritingTo: url) {
             handle.seekToEndOfFile()
             handle.write(Data(text.utf8))
@@ -212,7 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.addItem(NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r"))
 
         let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLogin), keyEquivalent: "")
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        login.state = LoginAgent.isInstalled ? .on : .off
         menu.addItem(login)
 
         menu.addItem(.separator())
@@ -231,11 +257,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func toggleLogin() {
         do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
+            if LoginAgent.isInstalled { try LoginAgent.remove() } else { try LoginAgent.install() }
         } catch {
             let alert = NSAlert()
             alert.messageText = "Couldn't change the Open at Login setting"
@@ -288,6 +310,18 @@ if let flag = CommandLine.arguments.firstIndex(of: "--snapshot"), CommandLine.ar
     writeSnapshots(to: CommandLine.arguments[flag + 1])
     exit(0)
 }
+// --login-on / --login-off: add or remove the launch agent, then exit.
+if CommandLine.arguments.contains("--login-on") || CommandLine.arguments.contains("--login-off") {
+    do {
+        if CommandLine.arguments.contains("--login-on") { try LoginAgent.install() } else { try LoginAgent.remove() }
+        print("Open at login: \(LoginAgent.isInstalled ? "on" : "off") (\(LoginAgent.url.path))")
+        exit(0)
+    } catch {
+        print("Failed: \(error.localizedDescription)")
+        exit(1)
+    }
+}
+
 // --toggle / --show / --hide: hand the command to the running copy, if there is one.
 if let command = ["toggle", "show", "hide"].first(where: { CommandLine.arguments.contains("--" + $0) }) {
     let me = NSRunningApplication.current
