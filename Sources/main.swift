@@ -17,6 +17,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var panel: FloatingPanel!
     private var statusItem: NSStatusItem!
     private let defaults = UserDefaults.standard
+    private var hotKeyRef: EventHotKeyRef?
+
+    private func writeLog(_ line: String) {
+        let url = LogReader.cacheURL.deletingLastPathComponent().appendingPathComponent("log.txt")
+        let text = "\(Date()): \(line) (login item: \(SMAppService.mainApp.status.rawValue))\n"
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(Data(text.utf8))
+            try? handle.close()
+        } else {
+            try? text.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
 
     private var isHidden: Bool {
         get { defaults.bool(forKey: "hidden") }
@@ -163,7 +176,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), nil)
         var ref: EventHotKeyRef?
         let id = EventHotKeyID(signature: OSType(0x5553_5447), id: 1)
-        RegisterEventHotKey(UInt32(kVK_ANSI_U), UInt32(cmdKey | optionKey), id, GetApplicationEventTarget(), 0, &ref)
+        let status = RegisterEventHotKey(UInt32(kVK_ANSI_U), UInt32(cmdKey | optionKey), id, GetApplicationEventTarget(), 0, &ref)
+        hotKeyRef = ref
+        writeLog("hot key Option-Command-U: \(status == noErr ? "registered" : "failed (\(status))")")
     }
 
     // MARK: Menu bar
